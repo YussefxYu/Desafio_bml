@@ -1,0 +1,118 @@
+<?php
+
+namespace App\Domain\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Usuario extends Model
+{
+    protected $table = 'usuarios';
+    protected $fillable = ['nome', 'email', 'senha'];
+}
+----------------------------------------------------------------------------
+<?php
+
+namespace App\Domain\Repositories;
+
+use App\Domain\Models\Usuario;
+
+class UsuarioRepository
+{
+    public function create(array $data): Usuario
+    {
+        return Usuario::create($data);
+    }
+    
+    public function getById(int $id): ?Usuario
+    {
+        return Usuario::find($id);
+    }
+    
+    public function update(Usuario $usuario): bool
+    {
+        return $usuario->save();
+    }
+    
+    public function getAll(): array
+    {
+        return Usuario::all()->toArray();
+    }
+}
+------------------------------------------------------------------
+<?php
+
+namespace App\Domain\Services;
+
+use App\Domain\Models\Usuario;
+use App\Domain\Repositories\UsuarioRepository;
+
+class UsuarioService
+{
+    private $usuarioRepository;
+    
+    public function __construct(UsuarioRepository $usuarioRepository)
+    {
+        $this->usuarioRepository = $usuarioRepository;
+    }
+    
+    public function cadastrarUsuario(array $data): void
+    {
+        $estado = $data['estado'];
+        $dataNascimento = $data['data_nascimento'];
+
+        if ($estado !== 'AM') {
+            throw new \InvalidArgumentException('Você não é residente do Amazonas.');
+        }
+
+        $idade = $this->calculateAge($dataNascimento);
+
+        if ($idade < 18) {
+            throw new \InvalidArgumentException('Você precisa ter pelo menos 18 anos para se cadastrar.');
+        }
+        
+        $usuario = new Usuario();
+        $usuario->fill($data);
+
+        $this->usuarioRepository->create($usuario->toArray());
+    }
+
+    public function listarUsuarios(): array
+    {
+        return $this->usuarioRepository->getAll();
+    }
+
+    public function editarUsuario(array $data): void
+    {
+        $usuario = $this->usuarioRepository->getById($data['id']);
+
+        if (!$usuario) {
+            throw new \InvalidArgumentException('Usuário não encontrado.');
+        }
+
+        $usuario->fill($data);
+
+        $this->usuarioRepository->update($usuario);
+    }
+    
+    private function calculateAge($dataNascimento): int
+    {
+        $dataAtual = new \DateTime();
+        $dataNascimento = new \DateTime($dataNascimento);
+        $intervalo = $dataAtual->diff($dataNascimento);
+
+        return $intervalo->y;
+    }
+}
+
+--------------------------------------------------------------------------
+
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Domain\Services\UsuarioService;
+use Illuminate\Http\Request;
+
+class UsuarioController extends Controller
+{
+    private $usuarioService;
